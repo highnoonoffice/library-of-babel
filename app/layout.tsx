@@ -1,16 +1,16 @@
 import type { Metadata } from 'next';
-import type { ReactNode } from 'react';
-import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Library of Babel',
-  description: 'Standalone Library of Babel explorer',
+  title: 'The Library of Babel',
+  description: 'Every text that has ever been written — or ever will be — already exists at a fixed address.',
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body style={{ margin: 0, padding: 0, background: '#060402', height: '100vh', overflow: 'hidden' }}>
+        {children}
+      </body>
     </html>
   );
 }

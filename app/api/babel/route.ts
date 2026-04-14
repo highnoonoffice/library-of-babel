@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
 import { CATALOG } from '@/lib/catalog';
 
-const ALPHABET = "abcdefghijklmnopqrstuvwxyz ,."; // 29 chars
+const ALPHABET = "abcdefghijklmnopqrstuvwxyz ,.";
 const BASE = 29n;
 const PAGE_LEN = 3200;
 
-// ——— Artifact fragments: coherent prose buried in the noise ———
-// Surfaces 1-in-12 pages. Feels like a found poem, a lost thing washed ashore.
 const ARTIFACTS = [
   "i have been here before i think in a dream or perhaps in some other life i cannot say",
   "the light was gold and long and the afternoon refused to end",
@@ -31,15 +29,10 @@ const ARTIFACTS = [
 ];
 
 function normalizeToAlphabet(text: string): string {
-  return text
-    .toLowerCase()
-    .split('')
-    .filter((c) => ALPHABET.includes(c))
-    .join('');
+  return text.toLowerCase().split('').filter(c => ALPHABET.includes(c)).join('');
 }
 
 function seededInt(seed: bigint, max: number): number {
-  // Simple deterministic hash from seed → [0, max)
   const s = (seed ^ (seed >> 33n)) * 0xff51afd7ed558ccdn;
   const t = (s ^ (s >> 33n)) * 0xc4ceb9fe1a85ec53n;
   const u = t ^ (t >> 33n);
@@ -49,8 +42,6 @@ function seededInt(seed: bigint, max: number): number {
 function generatePageContent(globalIndex: bigint): { raw: string; artifact: string | null; artifactOffset: number } {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { createHash } = require('crypto');
-
-  // Determine if this page has an artifact (1 in 12)
   const artifactCheck = seededInt(globalIndex * 7919n + 31337n, 12);
   const hasArtifact = artifactCheck === 0;
   const artifact = hasArtifact ? ARTIFACTS[seededInt(globalIndex * 1301n, ARTIFACTS.length)] : null;
@@ -69,7 +60,6 @@ function generatePageContent(globalIndex: bigint): { raw: string; artifact: stri
   let artifactOffset = -1;
   if (artifact) {
     const normalized = normalizeToAlphabet(artifact);
-    // Place it somewhere in the middle third, deterministically
     artifactOffset = seededInt(globalIndex * 997n, PAGE_LEN / 3) + PAGE_LEN / 3;
     raw = raw.slice(0, artifactOffset) + normalized + raw.slice(artifactOffset + normalized.length);
   }
@@ -83,7 +73,7 @@ function formatPage(raw: string, highlightIn: { start: number; end: number } | n
 } {
   let out = '';
   let highlightStart = -1;
-  let highlightEnd = -1;
+  let highlightEnd   = -1;
 
   for (let i = 0; i < raw.length; i++) {
     if (highlightIn && i === highlightIn.start) highlightStart = out.length;
@@ -98,7 +88,6 @@ function formatPage(raw: string, highlightIn: { start: number; end: number } | n
   };
 }
 
-// text → coordinates
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   const { text } = body;
@@ -106,73 +95,87 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing text string' }, { status: 400 });
   }
 
+  const normalized = normalizeToAlphabet(text);
+
   let index = 0n;
-  for (const ch of text.toLowerCase()) {
+  for (const ch of normalized) {
     const pos = ALPHABET.indexOf(ch);
     if (pos === -1) continue;
     index = index * BASE + BigInt(pos);
   }
 
-  const volume = Number(index % 32n);
-  const shelf = Number((index / 32n) % 5n);
-  const wall = Number((index / 160n) % 4n);
-  const hexagon = (index / 640n).toString();
+  const textOffset = Number(seededInt(index, PAGE_LEN - normalized.length - 1));
+
+  const volume  = Number(index % 32n);
+  const shelf   = Number((index / 32n) % 5n);
+  const wall    = Number((index / 160n) % 4n);
+  const hexBigInt = index / 640n;
+  const hexagon = hexBigInt.toString(36);
   const global_index_preview = hexagon.length > 15 ? `${hexagon.slice(0, 15)}...` : hexagon;
 
-  return NextResponse.json({ hexagon, wall: wall + 1, shelf: shelf + 1, volume: volume + 1, global_index_preview });
+  // Note: catalog writes removed — filesystem is read-only on Vercel
+
+  return NextResponse.json({
+    hexagon,
+    wall: wall + 1,
+    shelf: shelf + 1,
+    volume: volume + 1,
+    global_index_preview,
+    _globalIndex: index.toString(),
+    _textOffset: textOffset,
+    _textLength: normalized.length,
+  });
 }
 
-// coordinates → page content
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const hexagon = searchParams.get('hexagon') || '0';
-
-  const wallNum = Math.max(1, parseInt(searchParams.get('wall') || '1', 10));
-  const shelfNum = Math.max(1, parseInt(searchParams.get('shelf') || '1', 10));
-  const volumeNum = Math.max(1, parseInt(searchParams.get('volume') || '1', 10));
-
-  const wall = BigInt(wallNum - 1);
-  const shelf = BigInt(shelfNum - 1);
-  const volume = BigInt(volumeNum - 1);
+  const hexagon    = searchParams.get('hexagon') || '0';
+  const wall       = BigInt(Math.max(1, parseInt(searchParams.get('wall')   || '1', 10)) - 1);
+  const shelf      = BigInt(Math.max(1, parseInt(searchParams.get('shelf')  || '1', 10)) - 1);
+  const volume     = BigInt(Math.max(1, parseInt(searchParams.get('volume') || '1', 10)) - 1);
   const searchText = searchParams.get('text') || '';
 
   try {
-    const hexBig = BigInt(hexagon);
+    const B36 = 36n;
+    let hexBig = 0n;
+    for (const ch of hexagon.toLowerCase()) {
+      const d = ch >= '0' && ch <= '9' ? ch.charCodeAt(0) - 48 : ch.charCodeAt(0) - 87;
+      hexBig = hexBig * B36 + BigInt(d);
+    }
     const globalIndex = hexBig * 640n + wall * 160n + shelf * 32n + volume;
+
+    const wallNum = Number(wall) + 1;
+    const shelfNum = Number(shelf) + 1;
+    const volumeNum = Number(volume) + 1;
+    const addrKey = `${hexagon}-w${wallNum}-s${shelfNum}-v${volumeNum}`;
+    const activeText = searchText || CATALOG[addrKey] || '';
 
     const { raw, artifact, artifactOffset } = generatePageContent(globalIndex);
 
-    const addrKey = `${hexagon}-w${wallNum}-s${shelfNum}-v${volumeNum}`;
-    const catalogText = CATALOG[addrKey] ?? '';
-
-    // If user searched for text, embed it at offset 80. If not, auto-inject seeded catalog entries.
     let finalRaw = raw;
     let embedHighlight: { start: number; end: number } | null = null;
 
-    const injectSource = searchText || catalogText;
-    if (injectSource) {
-      const normalized = normalizeToAlphabet(injectSource);
+    if (activeText) {
+      const normalized = normalizeToAlphabet(activeText);
       if (normalized.length > 0 && normalized.length < PAGE_LEN) {
-        const offset = 80;
+        const offset = seededInt(globalIndex, PAGE_LEN - normalized.length - 1);
         finalRaw = finalRaw.slice(0, offset) + normalized + finalRaw.slice(offset + normalized.length);
         embedHighlight = { start: offset, end: offset + normalized.length };
       }
     }
 
-    // If no injected text, surface artifact highlight if present
-    const rawHighlight =
-      embedHighlight ??
-      (artifact && artifactOffset >= 0
+    const rawHighlight = embedHighlight ?? (
+      artifact && artifactOffset >= 0
         ? { start: artifactOffset, end: artifactOffset + normalizeToAlphabet(artifact).length }
-        : null);
+        : null
+    );
 
     const { page, highlight } = formatPage(finalRaw, rawHighlight);
 
     return NextResponse.json({
-      page,
-      highlight,
-      artifact: !injectSource ? artifact : null,
-      isArtifact: !injectSource && artifact !== null,
+      page, highlight,
+      artifact: !searchText ? artifact : null,
+      isArtifact: !searchText && artifact !== null,
       globalIndex: globalIndex.toString().slice(0, 20) + '...',
     });
   } catch {
