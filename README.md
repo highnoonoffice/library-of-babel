@@ -1,74 +1,33 @@
----
-title: "Library of Babel — Standalone Next.js Handoff"
-created: 2026-04-14
-modified: 2026-04-14
-tags: [readme, babel, nextjs, vercel, handoff]
-status: active
----
-
 # Library of Babel
 
-Standalone Next.js app for `highnoonoffice/library-of-babel`, designed for Vercel deployment.
+> "The Library exists ab aeterno." — Jorge Luis Borges
 
-## What Was Built
+Every piece of text that has ever been written — or ever could be written — exists
+somewhere in Borges' infinite Library. This tool finds it.
 
-- App Router UI with three modes: `Find Its Address`, `Explore a Location`, `Wander`.
-- API route at `app/api/babel/route.ts` for deterministic address lookup + page generation.
-- Static catalog import from `lib/catalog.ts` (no runtime filesystem writes).
-- Placeholder leather textures in `public/textures/` (100x200 PNGs) for visual parity until production assets are swapped in.
+A deterministic coordinate system for the Library of Babel. Give it any text and it
+returns a permanent hexagon address. Give it an address and it returns the exact page
+that lives there. No randomness. No database. Same input always produces identical output.
 
-## Repository Layout
+## What it does
 
-- `app/layout.tsx`
-- `app/page.tsx`
-- `app/api/babel/route.ts`
-- `components/Babel.tsx`
-- `lib/catalog.ts`
-- `public/textures/*`
+- **Find** — Locate any text: hexagon, wall, shelf, volume, page
+- **Read** — Navigate to any coordinate and read the exact 3,200-character page
+- **Catalog** — Save permanent addresses and revisit them
+- **Explore** — Page through volumes with Prev/Next navigation
 
-Legacy files are intentionally preserved and untouched:
+## The math
 
-- `SKILL.md`
-- `babel_core.py`
-- `references/`
+The Library contains 10^4677 books. Each book: 410 pages, 40 lines, 80 characters per
+line. 25-symbol character set. Every possible combination exists exactly once.
 
-## Local Development
+Addresses are base-36 encoded, 28 characters long. Fully deterministic — same input,
+same address, any machine, any session, any century.
 
-```bash
-npm install
-npm run dev
-```
+## Stack
 
-Open `http://localhost:3000`.
+TypeScript · Next.js · OpenClaw MCP skill integration
 
-## Build / Deploy
+---
 
-```bash
-npm run build
-npm run start
-```
-
-Deploy target: Vercel.
-
-## Verification Performed
-
-- `npm run build` passes with zero TypeScript errors.
-- `/` renders the full Babel UI (dark layout + three tabs).
-- Find flow works: POST `/api/babel` with `"call me ishmael"` returns coordinates.
-- Find flow works: GET `/api/babel` with those coordinates + text returns page content and highlight range.
-- Explore/Wander flows work: GET `/api/babel` with arbitrary coordinates returns page content.
-- No console/runtime errors related to `fs`, `path`, or filesystem writes.
-
-## Important Notes
-
-- `tsconfig.json` uses `"target": "ES2020"` because the API route intentionally uses BigInt literals (`29n`, etc.). Lowering this to `ES2017` causes compile failures.
-- Catalog persistence is static-by-design for Vercel compatibility; previous write-to-disk behavior was removed.
-- Address text source order is query text first, then `CATALOG` fallback.
-- Texture assets are placeholders and can be replaced later with photorealistic versions at the same filenames/paths.
-
-## PR Handoff Notes
-
-- Branch in use: `codex/standalone-nextjs-vercel`
-- Suggested PR title: `feat: standalone Next.js app for Vercel deployment`
-- Suggested PR description summary: built standalone Next.js app with UI + API route.
-- Suggested PR description summary: removed catalog filesystem writes and replaced with static `CATALOG` import for Vercel compatibility.
+Built by [High Noon Office](https://josephvoelbel.com)
