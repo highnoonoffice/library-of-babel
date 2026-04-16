@@ -16,6 +16,13 @@ that lives there. No randomness. No database. Same input always produces identic
 - **Catalog** — Save permanent addresses and revisit them
 - **Explore** — Page through volumes with Prev/Next navigation
 
+## Features
+
+- Page navigation: Prev/Next through all 410 pages of each volume.
+- Leather book spine textures (optional — 4 images in `public/textures/`).
+- Deterministic text placement — same text always highlighted at the same position on its home page.
+- In-session address book — search text carries from Find → Explore, highlight persists across navigation.
+
 ## The math
 
 The Library contains 10^4677 books. Each book: 410 pages, 40 lines, 80 characters per
@@ -24,10 +31,29 @@ line. 25-symbol character set. Every possible combination exists exactly once.
 Addresses are base-36 encoded, 28 characters long. Fully deterministic — same input,
 same address, any machine, any session, any century.
 
-## Stack
+## Installation
 
-TypeScript · Next.js · OpenClaw MCP skill integration
+```bash
+npm install
+npm run dev
+```
 
----
+## Textures (Optional)
+
+The Explore view renders photorealistic leather-bound book spines when 4 texture images are present at `public/textures/` in your Next.js app:
+
+- `leather-oxblood.png`
+- `leather-navy.png`
+- `leather-green.png`
+- `leather-tobacco.png`
+
+Without these files the component renders a CSS gold gradient fallback for selected volumes. No errors, no broken state.
+
+## Build / Deploy
+
+```bash
+npm run build
+npm run start
+```
 
 Built by [High Noon Office](https://josephvoelbel.com)
