@@ -101,8 +101,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing text string' }, { status: 400 });
   }
 
+  const normalized = normalizeToAlphabet(text);
+
   let index = 0n;
-  for (const ch of text.toLowerCase()) {
+  for (const ch of normalized) {
     const pos = ALPHABET.indexOf(ch);
     if (pos === -1) continue;
     index = index * BASE + BigInt(pos);
@@ -111,10 +113,20 @@ export async function POST(req: Request) {
   const volume  = Number(index % 32n);
   const shelf   = Number((index / 32n) % 5n);
   const wall    = Number((index / 160n) % 4n);
-  const hexagon = (index / 640n).toString();
+  const hexBigInt = index / 640n;
+  const hexagon = hexBigInt.toString(36);
   const global_index_preview = hexagon.length > 15 ? `${hexagon.slice(0, 15)}...` : hexagon;
 
-  return NextResponse.json({ hexagon, wall: wall + 1, shelf: shelf + 1, volume: volume + 1, global_index_preview });
+  return NextResponse.json({
+    hexagon,
+    wall: wall + 1,
+    shelf: shelf + 1,
+    volume: volume + 1,
+    global_index_preview,
+    _globalIndex: index.toString(),
+    _textOffset: Number(seededInt(index, PAGE_LEN - normalized.length - 1)),
+    _textLength: normalized.length,
+  });
 }
 
 // coordinates → page content
@@ -127,25 +139,30 @@ export async function GET(req: Request) {
   const searchText = searchParams.get('text') || '';
 
   try {
-    const hexBig      = BigInt(hexagon);
+    const B36 = 36n;
+    let hexBig = 0n;
+    for (const ch of hexagon.toLowerCase()) {
+      const d = ch >= '0' && ch <= '9' ? ch.charCodeAt(0) - 48 : ch.charCodeAt(0) - 87;
+      hexBig = hexBig * B36 + BigInt(d);
+    }
     const globalIndex = hexBig * 640n + wall * 160n + shelf * 32n + volume;
+
+    const activeText = searchText;
 
     const { raw, artifact, artifactOffset } = generatePageContent(globalIndex);
 
-    // If user searched for text, embed it at offset 80 (overrides artifact zone)
     let finalRaw = raw;
     let embedHighlight: { start: number; end: number } | null = null;
 
-    if (searchText) {
-      const normalized = normalizeToAlphabet(searchText);
+    if (activeText) {
+      const normalized = normalizeToAlphabet(activeText);
       if (normalized.length > 0 && normalized.length < PAGE_LEN) {
-        const offset = 80;
+        const offset = seededInt(globalIndex, PAGE_LEN - normalized.length - 1);
         finalRaw = finalRaw.slice(0, offset) + normalized + finalRaw.slice(offset + normalized.length);
         embedHighlight = { start: offset, end: offset + normalized.length };
       }
     }
 
-    // If no search text, surface artifact highlight if present
     const rawHighlight = embedHighlight ?? (
       artifact && artifactOffset >= 0
         ? { start: artifactOffset, end: artifactOffset + normalizeToAlphabet(artifact).length }
@@ -157,7 +174,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       page,
       highlight,
-      artifact: !searchText ? artifact : null,   // signal to client that this is a found artifact
+      artifact: !searchText ? artifact : null,
       isArtifact: !searchText && artifact !== null,
       globalIndex: globalIndex.toString().slice(0, 20) + '...',
     });
